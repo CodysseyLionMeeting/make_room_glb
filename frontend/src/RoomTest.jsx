@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { OrbitControls, useGLTF, Environment } from "@react-three/drei";
+import { OrbitControls, useGLTF, Environment, PerspectiveCamera, OrthographicCamera } from "@react-three/drei";
 import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter";
 
@@ -9,6 +9,15 @@ import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter";
 // ==========================================
 const TILE_SIZE = 0.5;
 const WALL_HEIGHT = 2.5;
+
+// Preset Texture Library (가상의 기본 텍스처 경로)
+// 실제 사용 시 public/textures/ 폴더에 이미지 파일을 넣어야 함
+const PRESET_TEXTURES = [
+  { id: 'wood1', name: '나무 (밝은색)', url: '/textures/wood.jpg' },
+  { id: 'marble1', name: '대리석 (흰색)', url: '/textures/marble.jpg' },
+  { id: 'tile1', name: '타일 (회색)', url: '/textures/tile.jpg' },
+  { id: 'wallpaper1', name: '벽지 (베이지)', url: '/textures/wallpaper.jpg' },
+];
 
 // 방 템플릿 정의
 const ROOM_TEMPLATES = {
@@ -608,10 +617,105 @@ const ROOM_TEMPLATES = {
       return tiles;
     },
   },
+  // NEW: Custom parametric template (사용자가 크기를 조절할 수 있는 템플릿)
+  custom: {
+    name: "사용자 정의",
+    description: "크기 조절 가능",
+    width: 4.0, // 기본값
+    depth: 4.0, // 기본값
+    // generateFloor와 generateWalls는 rectangular와 동일
+    generateFloor: (width, depth) => {
+      const tiles = [];
+      const xCount = width / TILE_SIZE;
+      const zCount = depth / TILE_SIZE;
+      for (let x = 0; x < xCount; x++) {
+        for (let z = 0; z < zCount; z++) {
+          tiles.push({
+            key: `floor-${x}-${z}`,
+            type: "floor",
+            position: [x * TILE_SIZE + TILE_SIZE / 2, 0, z * TILE_SIZE + TILE_SIZE / 2],
+            rotation: [0, 0, 0],
+          });
+        }
+      }
+      return tiles;
+    },
+    generateWalls: (width, depth) => {
+      const tiles = [];
+      const xCount = width / TILE_SIZE;
+      const zCount = depth / TILE_SIZE;
+      const yCount = WALL_HEIGHT / TILE_SIZE;
+
+      for (let y = 0; y < yCount; y++) {
+        const yPos = y * TILE_SIZE + TILE_SIZE / 2;
+
+        // 뒷벽
+        for (let x = 0; x < xCount; x++) {
+          tiles.push({
+            key: `wall-back-${x}-${y}`,
+            type: "wall",
+            position: [x * TILE_SIZE + TILE_SIZE / 2, yPos, 0],
+            rotation: [-Math.PI / 2, 0, 0],
+          });
+        }
+        // 앞벽
+        for (let x = 0; x < xCount; x++) {
+          tiles.push({
+            key: `wall-front-${x}-${y}`,
+            type: "wall",
+            position: [x * TILE_SIZE + TILE_SIZE / 2, yPos, depth],
+            rotation: [Math.PI / 2, 0, 0],
+          });
+        }
+        // 왼쪽 벽
+        for (let z = 0; z < zCount; z++) {
+          tiles.push({
+            key: `wall-left-${z}-${y}`,
+            type: "wall",
+            position: [0, yPos, z * TILE_SIZE + TILE_SIZE / 2],
+            rotation: [0, 0, Math.PI / 2],
+          });
+        }
+        // 오른쪽 벽
+        for (let z = 0; z < zCount; z++) {
+          tiles.push({
+            key: `wall-right-${z}-${y}`,
+            type: "wall",
+            position: [width, yPos, z * TILE_SIZE + TILE_SIZE / 2],
+            rotation: [0, 0, -Math.PI / 2],
+          });
+        }
+      }
+      return tiles;
+    },
+  },
 };
 
 // ==========================================
-// 2. 타일 컴포넌트 (수정됨: 재질 및 그림자 적용)
+// 2. Camera Controller (2D/3D Toggle)
+// ==========================================
+function CameraController({ viewMode, roomWidth, roomDepth }) {
+  const { camera } = useThree();
+  const centerX = roomWidth / 2;
+  const centerZ = roomDepth / 2;
+
+  useEffect(() => {
+    if (viewMode === '2D') {
+      // 2D 모드: 위에서 내려다보기 (Orthographic)
+      camera.position.set(centerX, 10, centerZ);
+      camera.lookAt(centerX, 0, centerZ);
+    } else {
+      // 3D 모드: 기본 Perspective 뷰
+      camera.position.set(centerX + 3, 5, centerZ + 4);
+      camera.lookAt(centerX, 0, centerZ);
+    }
+  }, [viewMode, camera, centerX, centerZ, roomWidth, roomDepth]);
+
+  return null;
+}
+
+// ==========================================
+// 3. 타일 컴포넌트 (수정됨: 재질 및 그림자 적용)
 // ==========================================
 function Tile({
   tileKey,
@@ -721,9 +825,9 @@ function Tile({
 }
 
 // ==========================================
-// 3. 방 생성기 (템플릿 기반)
+// 3. 방 생성기 (템플릿 기반 + Parametric)
 // ==========================================
-const RoomBuilder = React.forwardRef(({ template, selectedTiles, tileTextures, onTileSelect }, ref) => {
+const RoomBuilder = React.forwardRef(({ template, selectedTiles, tileTextures, onTileSelect, customWidth, customDepth }, ref) => {
   const roomTemplate = ROOM_TEMPLATES[template];
   const groupRef = useRef();
 
@@ -732,9 +836,13 @@ const RoomBuilder = React.forwardRef(({ template, selectedTiles, tileTextures, o
     getScene: () => groupRef.current,
   }));
 
+  // Custom 템플릿인 경우 customWidth/customDepth 사용, 아니면 템플릿의 기본값 사용
+  const actualWidth = template === 'custom' ? customWidth : roomTemplate.width;
+  const actualDepth = template === 'custom' ? customDepth : roomTemplate.depth;
+
   // 템플릿에서 타일 데이터 생성
-  const floorTileData = roomTemplate.generateFloor(roomTemplate.width, roomTemplate.depth);
-  const wallTileData = roomTemplate.generateWalls(roomTemplate.width, roomTemplate.depth);
+  const floorTileData = roomTemplate.generateFloor(actualWidth, actualDepth);
+  const wallTileData = roomTemplate.generateWalls(actualWidth, actualDepth);
 
   const floorTiles = [];
   const wallTiles = [];
@@ -794,6 +902,14 @@ export default function App() {
   const [showTemplates, setShowTemplates] = useState(false); // 템플릿 섹션 표시 여부
   const [sidebarWidth, setSidebarWidth] = useState(280); // 우측 사이드바 너비
   const [isResizing, setIsResizing] = useState(false); // 리사이징 중인지 여부
+
+  // NEW: Parametric Room Size (Feature 1)
+  const [customWidth, setCustomWidth] = useState(4.0); // 사용자 정의 방 가로 크기 (미터)
+  const [customDepth, setCustomDepth] = useState(4.0); // 사용자 정의 방 세로 크기 (미터)
+
+  // NEW: 2D/3D View Toggle (Feature 3)
+  const [viewMode, setViewMode] = useState('3D'); // '3D' or '2D'
+
   const fileInputRef = useRef(null);
   const roomBuilderRef = useRef(null);
 
@@ -1477,7 +1593,7 @@ export default function App() {
               style={{ width: "100%", height: "4px" }}
             />
           </div>
-          <div>
+          <div style={{ marginBottom: "10px" }}>
             <label style={{ fontSize: "10px", color: "#666", display: "block", marginBottom: "3px" }}>
               방향광: {directionalIntensity.toFixed(1)}
             </label>
@@ -1491,6 +1607,92 @@ export default function App() {
               style={{ width: "100%", height: "4px" }}
             />
           </div>
+
+          {/* NEW: Parametric Room Size Sliders (Custom 템플릿일 때만 표시) */}
+          {currentTemplate === 'custom' && (
+            <>
+              <h4 style={{ margin: "10px 0 8px 0", fontSize: "12px", fontWeight: "bold" }}>
+                📐 방 크기
+              </h4>
+              <div style={{ marginBottom: "8px" }}>
+                <label style={{ fontSize: "10px", color: "#666", display: "block", marginBottom: "3px" }}>
+                  가로 (Width): {customWidth.toFixed(1)}m
+                </label>
+                <input
+                  type="range"
+                  min="2"
+                  max="10"
+                  step="0.5"
+                  value={customWidth}
+                  onChange={(e) => {
+                    setCustomWidth(parseFloat(e.target.value));
+                    setSelectedTiles([]); // 크기 변경 시 선택 초기화
+                    setTileTextures({}); // 텍스처도 초기화
+                  }}
+                  style={{ width: "100%", height: "4px" }}
+                />
+              </div>
+              <div style={{ marginBottom: "10px" }}>
+                <label style={{ fontSize: "10px", color: "#666", display: "block", marginBottom: "3px" }}>
+                  세로 (Depth): {customDepth.toFixed(1)}m
+                </label>
+                <input
+                  type="range"
+                  min="2"
+                  max="10"
+                  step="0.5"
+                  value={customDepth}
+                  onChange={(e) => {
+                    setCustomDepth(parseFloat(e.target.value));
+                    setSelectedTiles([]); // 크기 변경 시 선택 초기화
+                    setTileTextures({}); // 텍스처도 초기화
+                  }}
+                  style={{ width: "100%", height: "4px" }}
+                />
+              </div>
+            </>
+          )}
+
+          {/* NEW: 2D/3D View Toggle */}
+          <h4 style={{ margin: "10px 0 8px 0", fontSize: "12px", fontWeight: "bold" }}>
+            👁️ 뷰 모드
+          </h4>
+          <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
+            <button
+              onClick={() => setViewMode('3D')}
+              style={{
+                flex: 1,
+                padding: "6px",
+                fontSize: "10px",
+                cursor: "pointer",
+                background: viewMode === '3D' ? "#2196F3" : "#f0f0f0",
+                color: viewMode === '3D' ? "white" : "#333",
+                border: viewMode === '3D' ? "1px solid #1976D2" : "1px solid #ddd",
+                borderRadius: "4px",
+                fontWeight: viewMode === '3D' ? "bold" : "normal",
+                transition: "all 0.2s ease",
+              }}
+            >
+              3D
+            </button>
+            <button
+              onClick={() => setViewMode('2D')}
+              style={{
+                flex: 1,
+                padding: "6px",
+                fontSize: "10px",
+                cursor: "pointer",
+                background: viewMode === '2D' ? "#2196F3" : "#f0f0f0",
+                color: viewMode === '2D' ? "white" : "#333",
+                border: viewMode === '2D' ? "1px solid #1976D2" : "1px solid #ddd",
+                borderRadius: "4px",
+                fontWeight: viewMode === '2D' ? "bold" : "normal",
+                transition: "all 0.2s ease",
+              }}
+            >
+              2D
+            </button>
+          </div>
         </div>
 
         <Canvas
@@ -1500,6 +1702,13 @@ export default function App() {
             console.log("Canvas clicked (no object)");
           }}
         >
+          {/* Camera Controller for 2D/3D Toggle */}
+          <CameraController
+            viewMode={viewMode}
+            roomWidth={currentTemplate === 'custom' ? customWidth : roomTemplate.width}
+            roomDepth={currentTemplate === 'custom' ? customDepth : roomTemplate.depth}
+          />
+
           <ambientLight intensity={ambientIntensity} />
           <directionalLight
             position={[5, 10, 7]}
@@ -1508,12 +1717,14 @@ export default function App() {
             shadow-mapSize={[2048, 2048]}
           />
           <Environment preset="city" background={false} environmentIntensity={0.15} />
+
+          {/* OrbitControls: 2D 모드에서는 회전 비활성화 */}
           <OrbitControls
             minDistance={2}
             maxDistance={15}
             enablePan={true}
             enableDamping={false}
-            enableRotate={true}
+            enableRotate={viewMode === '3D'} // 3D 모드에서만 회전 가능
             mouseButtons={{
               LEFT: THREE.MOUSE.ROTATE, // 좌클릭: 회전 (드래그 시)
               MIDDLE: THREE.MOUSE.DOLLY, // 휠클릭: 줌
@@ -1521,12 +1732,16 @@ export default function App() {
             }}
           />
           <axesHelper args={[2]} position={[-0.5, 0, -0.5]} />
+
+          {/* RoomBuilder with Parametric Size Support */}
           <RoomBuilder
             ref={roomBuilderRef}
             template={currentTemplate}
             selectedTiles={selectedTiles}
             tileTextures={tileTextures}
             onTileSelect={handleTileSelect}
+            customWidth={customWidth}
+            customDepth={customDepth}
           />
         </Canvas>
       </div>
@@ -1856,6 +2071,51 @@ export default function App() {
         >
           {isExporting ? "⏳ 내보내는 중..." : "📦 GLB 파일로 내보내기"}
         </button>
+
+        {/* NEW: Preset Texture Library */}
+        <div style={{ marginBottom: "12px" }}>
+          <div style={{ fontSize: "13px", fontWeight: "bold", marginBottom: "8px" }}>
+            🎨 프리셋 텍스처
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            {PRESET_TEXTURES.map((preset) => (
+              <button
+                key={preset.id}
+                onClick={() => {
+                  // 프리셋을 selectedImage로 설정 (업로드한 이미지와 동일하게 취급)
+                  setSelectedImage({ id: preset.id, url: preset.url, name: preset.name });
+                }}
+                onMouseEnter={(e) => {
+                  if (selectedImage?.id !== preset.id) {
+                    e.currentTarget.style.transform = "scale(1.05)";
+                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+                style={{
+                  padding: "8px",
+                  fontSize: "10px",
+                  cursor: "pointer",
+                  background: selectedImage?.id === preset.id ? "#e3f2fd" : "#f9f9f9",
+                  color: "#333",
+                  border: selectedImage?.id === preset.id ? "2px solid #2196F3" : "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontWeight: selectedImage?.id === preset.id ? "bold" : "normal",
+                  textAlign: "center",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                {preset.name}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: "9px", color: "#999", marginTop: "4px", lineHeight: "1.3" }}>
+            ℹ️ 프리셋은 가상 경로입니다. public/textures/ 폴더에 실제 이미지를 넣어야 작동합니다.
+          </div>
+        </div>
 
         {/* 이미지 갤러리 */}
         <div style={{ fontSize: "13px", fontWeight: "bold", marginBottom: "8px" }}>
