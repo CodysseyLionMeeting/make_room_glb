@@ -10,21 +10,19 @@ echo "📦 Updating system packages..."
 sudo apt-get update
 sudo apt-get upgrade -y
 
-# Install dependencies
-echo "📦 Installing dependencies..."
-sudo apt-get install -y \
-    python3-pip \
-    python3-venv \
-    nodejs \
-    npm \
-    nginx \
-    git \
-    curl
-
-# Install Node.js 20 (latest LTS)
+# Install Node.js 20 (latest LTS) - includes npm
 echo "📦 Installing Node.js 20..."
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
+
+# Install other dependencies
+echo "📦 Installing other dependencies..."
+sudo apt-get install -y \
+    python3-pip \
+    python3-venv \
+    nginx \
+    git \
+    curl
 
 # Create application directory
 echo "📁 Creating application directory..."
@@ -84,7 +82,7 @@ server {
     # Frontend
     location / {
         root /var/www/make-room-glb/frontend/dist;
-        try_files \$uri \$uri/ /index.html;
+        try_files \$uri \$uri/ /index.html =404;
     }
 
     # Backend API
