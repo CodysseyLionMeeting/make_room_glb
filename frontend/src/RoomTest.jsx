@@ -10,15 +10,6 @@ import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter";
 const TILE_SIZE = 0.5;
 const WALL_HEIGHT = 2.5;
 
-// Preset Texture Library (가상의 기본 텍스처 경로)
-// 실제 사용 시 public/textures/ 폴더에 이미지 파일을 넣어야 함
-const PRESET_TEXTURES = [
-  { id: 'wood1', name: '나무 (밝은색)', url: '/textures/wood.jpg' },
-  { id: 'marble1', name: '대리석 (흰색)', url: '/textures/marble.jpg' },
-  { id: 'tile1', name: '타일 (회색)', url: '/textures/tile.jpg' },
-  { id: 'wallpaper1', name: '벽지 (베이지)', url: '/textures/wallpaper.jpg' },
-];
-
 // 방 템플릿 정의
 const ROOM_TEMPLATES = {
   small_studio: {
@@ -778,8 +769,8 @@ function Tile({
       // 움직임이 5픽셀 이하면 클릭으로 간주 (드래그가 아님)
       if (deltaX < 5 && deltaY < 5) {
         e.stopPropagation();
-        console.log("Tile clicked:", tileKey, "isSelected:", isSelected);
-        onSelect(tileKey);
+        console.log("Tile clicked:", tileKey, "isSelected:", isSelected, "shiftKey:", e.shiftKey);
+        onSelect(tileKey, e.shiftKey); // Shift 키 상태 전달
       } else {
         console.log("Dragged, not selecting");
       }
@@ -916,8 +907,36 @@ export default function App() {
   }, [isResizing]);
 
   // 타일 선택/해제 핸들러
-  const handleTileSelect = (tileKey) => {
-    console.log("handleTileSelect called with:", tileKey);
+  const handleTileSelect = (tileKey, shiftKey = false) => {
+    console.log("handleTileSelect called with:", tileKey, "shiftKey:", shiftKey);
+
+    // Shift + 클릭: 클릭한 타일의 영역 전체 선택
+    if (shiftKey) {
+      if (tileKey.startsWith("floor")) {
+        // 바닥 전체 선택
+        console.log("Shift + Click: Selecting all floor tiles");
+        handleSelectAllFloor();
+      } else if (tileKey.startsWith("wall-front")) {
+        // 앞벽 전체 선택
+        console.log("Shift + Click: Selecting front wall");
+        handleSelectWall("front");
+      } else if (tileKey.startsWith("wall-back")) {
+        // 뒷벽 전체 선택
+        console.log("Shift + Click: Selecting back wall");
+        handleSelectWall("back");
+      } else if (tileKey.startsWith("wall-left")) {
+        // 왼쪽 벽 전체 선택
+        console.log("Shift + Click: Selecting left wall");
+        handleSelectWall("left");
+      } else if (tileKey.startsWith("wall-right")) {
+        // 오른쪽 벽 전체 선택
+        console.log("Shift + Click: Selecting right wall");
+        handleSelectWall("right");
+      }
+      return;
+    }
+
+    // 일반 클릭: 개별 타일 선택/해제
     setSelectedTiles((prev) => {
       const isCurrentlySelected = prev.includes(tileKey);
       console.log("Currently selected:", prev, "Is selected:", isCurrentlySelected);
@@ -1045,14 +1064,20 @@ export default function App() {
 
   // 바닥 전체 선택
   const handleSelectAllFloor = () => {
-    const floorTileData = roomTemplate.generateFloor(roomTemplate.width, roomTemplate.depth);
+    // custom 템플릿인 경우 customWidth/customDepth 사용, 아니면 템플릿 기본값 사용
+    const actualWidth = currentTemplate === 'custom' ? customWidth : roomTemplate.width;
+    const actualDepth = currentTemplate === 'custom' ? customDepth : roomTemplate.depth;
+    const floorTileData = roomTemplate.generateFloor(actualWidth, actualDepth);
     const floorKeys = floorTileData.map((tile) => tile.key);
     setSelectedTiles(floorKeys);
   };
 
   // 특정 벽면 전체 선택
   const handleSelectWall = (wallType) => {
-    const wallTileData = roomTemplate.generateWalls(roomTemplate.width, roomTemplate.depth);
+    // custom 템플릿인 경우 customWidth/customDepth 사용, 아니면 템플릿 기본값 사용
+    const actualWidth = currentTemplate === 'custom' ? customWidth : roomTemplate.width;
+    const actualDepth = currentTemplate === 'custom' ? customDepth : roomTemplate.depth;
+    const wallTileData = roomTemplate.generateWalls(actualWidth, actualDepth);
     const wallKeys = wallTileData
       .filter((tile) => tile.key.startsWith(`wall-${wallType}`))
       .map((tile) => tile.key);
@@ -1996,51 +2021,6 @@ export default function App() {
         >
           {isExporting ? "⏳ 내보내는 중..." : "📦 GLB 파일로 내보내기"}
         </button>
-
-        {/* NEW: Preset Texture Library */}
-        <div style={{ marginBottom: "12px" }}>
-          <div style={{ fontSize: "13px", fontWeight: "bold", marginBottom: "8px" }}>
-            🎨 프리셋 텍스처
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-            {PRESET_TEXTURES.map((preset) => (
-              <button
-                key={preset.id}
-                onClick={() => {
-                  // 프리셋을 selectedImage로 설정 (업로드한 이미지와 동일하게 취급)
-                  setSelectedImage({ id: preset.id, url: preset.url, name: preset.name });
-                }}
-                onMouseEnter={(e) => {
-                  if (selectedImage?.id !== preset.id) {
-                    e.currentTarget.style.transform = "scale(1.05)";
-                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "scale(1)";
-                  e.currentTarget.style.boxShadow = "none";
-                }}
-                style={{
-                  padding: "8px",
-                  fontSize: "10px",
-                  cursor: "pointer",
-                  background: selectedImage?.id === preset.id ? "#e3f2fd" : "#f9f9f9",
-                  color: "#333",
-                  border: selectedImage?.id === preset.id ? "2px solid #2196F3" : "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontWeight: selectedImage?.id === preset.id ? "bold" : "normal",
-                  textAlign: "center",
-                  transition: "all 0.2s ease",
-                }}
-              >
-                {preset.name}
-              </button>
-            ))}
-          </div>
-          <div style={{ fontSize: "9px", color: "#999", marginTop: "4px", lineHeight: "1.3" }}>
-            ℹ️ 프리셋은 가상 경로입니다. public/textures/ 폴더에 실제 이미지를 넣어야 작동합니다.
-          </div>
-        </div>
 
         {/* 이미지 갤러리 */}
         <div style={{ fontSize: "13px", fontWeight: "bold", marginBottom: "8px" }}>
