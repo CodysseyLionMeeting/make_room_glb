@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { OrbitControls, useGLTF, Environment, PerspectiveCamera, OrthographicCamera } from "@react-three/drei";
+import { OrbitControls, useGLTF, Environment } from "@react-three/drei";
 import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter";
 
@@ -692,30 +692,7 @@ const ROOM_TEMPLATES = {
 };
 
 // ==========================================
-// 2. Camera Controller (2D/3D Toggle)
-// ==========================================
-function CameraController({ viewMode, roomWidth, roomDepth }) {
-  const { camera } = useThree();
-  const centerX = roomWidth / 2;
-  const centerZ = roomDepth / 2;
-
-  useEffect(() => {
-    if (viewMode === '2D') {
-      // 2D 모드: 위에서 내려다보기 (Orthographic)
-      camera.position.set(centerX, 10, centerZ);
-      camera.lookAt(centerX, 0, centerZ);
-    } else {
-      // 3D 모드: 기본 Perspective 뷰
-      camera.position.set(centerX + 3, 5, centerZ + 4);
-      camera.lookAt(centerX, 0, centerZ);
-    }
-  }, [viewMode, camera, centerX, centerZ, roomWidth, roomDepth]);
-
-  return null;
-}
-
-// ==========================================
-// 3. 타일 컴포넌트 (수정됨: 재질 및 그림자 적용)
+// 2. 타일 컴포넌트 (수정됨: 재질 및 그림자 적용)
 // ==========================================
 function Tile({
   tileKey,
@@ -906,9 +883,6 @@ export default function App() {
   // NEW: Parametric Room Size (Feature 1)
   const [customWidth, setCustomWidth] = useState(4.0); // 사용자 정의 방 가로 크기 (미터)
   const [customDepth, setCustomDepth] = useState(4.0); // 사용자 정의 방 세로 크기 (미터)
-
-  // NEW: 2D/3D View Toggle (Feature 3)
-  const [viewMode, setViewMode] = useState('3D'); // '3D' or '2D'
 
   const fileInputRef = useRef(null);
   const roomBuilderRef = useRef(null);
@@ -1653,46 +1627,6 @@ export default function App() {
             </>
           )}
 
-          {/* NEW: 2D/3D View Toggle */}
-          <h4 style={{ margin: "10px 0 8px 0", fontSize: "12px", fontWeight: "bold" }}>
-            👁️ 뷰 모드
-          </h4>
-          <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
-            <button
-              onClick={() => setViewMode('3D')}
-              style={{
-                flex: 1,
-                padding: "6px",
-                fontSize: "10px",
-                cursor: "pointer",
-                background: viewMode === '3D' ? "#2196F3" : "#f0f0f0",
-                color: viewMode === '3D' ? "white" : "#333",
-                border: viewMode === '3D' ? "1px solid #1976D2" : "1px solid #ddd",
-                borderRadius: "4px",
-                fontWeight: viewMode === '3D' ? "bold" : "normal",
-                transition: "all 0.2s ease",
-              }}
-            >
-              3D
-            </button>
-            <button
-              onClick={() => setViewMode('2D')}
-              style={{
-                flex: 1,
-                padding: "6px",
-                fontSize: "10px",
-                cursor: "pointer",
-                background: viewMode === '2D' ? "#2196F3" : "#f0f0f0",
-                color: viewMode === '2D' ? "white" : "#333",
-                border: viewMode === '2D' ? "1px solid #1976D2" : "1px solid #ddd",
-                borderRadius: "4px",
-                fontWeight: viewMode === '2D' ? "bold" : "normal",
-                transition: "all 0.2s ease",
-              }}
-            >
-              2D
-            </button>
-          </div>
         </div>
 
         <Canvas
@@ -1702,13 +1636,6 @@ export default function App() {
             console.log("Canvas clicked (no object)");
           }}
         >
-          {/* Camera Controller for 2D/3D Toggle */}
-          <CameraController
-            viewMode={viewMode}
-            roomWidth={currentTemplate === 'custom' ? customWidth : roomTemplate.width}
-            roomDepth={currentTemplate === 'custom' ? customDepth : roomTemplate.depth}
-          />
-
           <ambientLight intensity={ambientIntensity} />
           <directionalLight
             position={[5, 10, 7]}
@@ -1718,13 +1645,11 @@ export default function App() {
           />
           <Environment preset="city" background={false} environmentIntensity={0.15} />
 
-          {/* OrbitControls: 2D 모드에서는 회전 비활성화 */}
           <OrbitControls
             minDistance={2}
             maxDistance={15}
             enablePan={true}
             enableDamping={false}
-            enableRotate={viewMode === '3D'} // 3D 모드에서만 회전 가능
             mouseButtons={{
               LEFT: THREE.MOUSE.ROTATE, // 좌클릭: 회전 (드래그 시)
               MIDDLE: THREE.MOUSE.DOLLY, // 휠클릭: 줌
