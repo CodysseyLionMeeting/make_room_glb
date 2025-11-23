@@ -665,11 +665,11 @@ function Tile({
           roughness: 0.8, // 거칠기 증가 (빛 반사 감소)
           metalness: 0.0, // 금속성 제거
           side: THREE.DoubleSide, // 양면 렌더링
-          // 자연광 효과
+          // 자연광 효과 (GLB 내보내기와 동일한 밝기)
           emissive: isSelected
             ? new THREE.Color(0x2266cc) // 선택 시 파란색 발광
-            : (texture ? new THREE.Color(0x404040) : new THREE.Color(0x303030)), // 자체 발광
-          emissiveIntensity: isSelected ? 0.8 : (texture ? 0.3 : 0.2), // 선택 시 더 강한 발광
+            : (texture ? new THREE.Color(0x202020) : new THREE.Color(0x181818)), // 자체 발광
+          emissiveIntensity: isSelected ? 0.8 : (texture ? 0.15 : 0.1), // 선택 시 더 강한 발광
           toneMapped: false, // 톤 매핑 비활성화로 더 밝게
         });
 
@@ -844,30 +844,68 @@ export default function App() {
     });
   };
 
-  // 파일 업로드 핸들러 (이미지를 갤러리에 추가)
-  const handleFileUpload = (e) => {
+  // 파일 업로드 핸들러 (이미지를 백엔드로 전송하여 심리스 텍스처 생성)
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (file && file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const imageUrl = event.target.result;
+      console.log("[DEBUG] 파일 선택됨:", file.name, file.type, file.size);
 
-        // 이미지 갤러리에 추가
+      try {
+        // FormData 생성
+        const formData = new FormData();
+        formData.append("file", file);
+
+        console.log("[DEBUG] 백엔드로 요청 전송 중...");
+
+        // 백엔드로 전송
+        const response = await fetch("http://localhost:8000/upload-texture", {
+          method: "POST",
+          body: formData,
+        });
+
+        console.log("[DEBUG] 응답 받음:", response.status, response.statusText);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("[ERROR] 응답 오류:", errorText);
+          throw new Error(`텍스처 생성 실패: ${response.status} ${errorText}`);
+        }
+
+        const contentType = response.headers.get("content-type");
+        console.log("[DEBUG] Content-Type:", contentType);
+
+        const data = await response.json();
+        console.log("[DEBUG] 응답 데이터:", {
+          success: data.success,
+          size: data.size,
+          texture_url_length: data.texture_url ? data.texture_url.length : 0
+        });
+
+        if (!data.success || !data.texture_url) {
+          throw new Error("서버 응답이 올바르지 않습니다.");
+        }
+
+        // 심리스 텍스처를 갤러리에 추가
         setUploadedImages((prev) => [
           ...prev,
           {
             id: Date.now(),
-            url: imageUrl,
+            url: data.texture_url, // 백엔드에서 받은 base64 이미지
             name: file.name,
           },
         ]);
+
+        console.log("[SUCCESS] 이미지 갤러리에 추가됨");
 
         // 파일 입력 초기화
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (error) {
+        console.error("[ERROR] 이미지 업로드 실패:", error);
+        console.error("[ERROR] 에러 스택:", error.stack);
+        alert(`이미지 처리 중 오류가 발생했습니다.\n\n에러: ${error.message}\n\n백엔드 서버가 http://localhost:8000 에서 실행 중인지 확인해주세요.`);
+      }
     }
   };
 
@@ -1172,10 +1210,10 @@ export default function App() {
               child.material = child.material.clone();
               child.material.map = loadedTextures[groupKey];
 
-              // 자연광 효과
+              // 자연광 효과 (밝기 감소)
               child.material.color = new THREE.Color(0xffffff);
-              child.material.emissive = new THREE.Color(0x404040);
-              child.material.emissiveIntensity = 0.3;
+              child.material.emissive = new THREE.Color(0x202020);
+              child.material.emissiveIntensity = 0.15;
               child.material.toneMapped = false;
               child.material.needsUpdate = true;
             }
@@ -1183,8 +1221,8 @@ export default function App() {
             // 텍스처가 없는 타일
             child.material = child.material.clone();
             child.material.color = new THREE.Color(0xffffff);
-            child.material.emissive = new THREE.Color(0x303030);
-            child.material.emissiveIntensity = 0.2;
+            child.material.emissive = new THREE.Color(0x181818);
+            child.material.emissiveIntensity = 0.1;
             child.material.toneMapped = false;
             child.material.needsUpdate = true;
           }

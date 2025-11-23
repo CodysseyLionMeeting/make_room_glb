@@ -81,6 +81,81 @@ Tested on modern browsers with WebGL support:
 - Safari 14+
 - Edge 90+
 
+## AWS Deployment
+
+### Option 1: S3 + CloudFront (Recommended)
+
+1. Build the production bundle:
+```bash
+npm run build
+```
+
+2. Create an S3 bucket for static website hosting:
+```bash
+aws s3 mb s3://your-room-builder-frontend
+aws s3 website s3://your-room-builder-frontend --index-document index.html
+```
+
+3. Upload the built files:
+```bash
+aws s3 sync dist/ s3://your-room-builder-frontend --acl public-read
+```
+
+4. Create a CloudFront distribution pointing to your S3 bucket for HTTPS and CDN
+5. Update the backend API URL in RoomTest.jsx:
+```javascript
+// Change from
+const response = await fetch("http://localhost:8000/upload-texture", {
+// To
+const response = await fetch("https://your-backend-api-url/upload-texture", {
+```
+
+### Option 2: AWS Amplify (Easiest)
+
+1. Install Amplify CLI:
+```bash
+npm install -g @aws-amplify/cli
+amplify configure
+```
+
+2. Initialize Amplify in your project:
+```bash
+amplify init
+```
+
+3. Add hosting:
+```bash
+amplify add hosting
+# Select: Hosting with Amplify Console
+# Select: Manual deployment
+```
+
+4. Build and deploy:
+```bash
+npm run build
+amplify publish
+```
+
+5. Amplify will provide a URL where your app is hosted
+6. Update the backend API URL as mentioned above
+
+### Environment Variables
+
+For different environments, create a .env file:
+
+```
+VITE_API_URL=https://your-backend-api-url
+```
+
+Then update the fetch call in RoomTest.jsx:
+
+```javascript
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const response = await fetch(`${API_URL}/upload-texture`, {
+```
+
+Remember to rebuild after changing environment variables.
+
 ## License
 
 MIT
