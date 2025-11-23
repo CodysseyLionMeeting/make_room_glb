@@ -1845,7 +1845,7 @@ export default function App() {
             {isGenerating ? "⏳ 생성 중... (30초 소요)" : "✨ AI로 생성"}
           </button>
           <div style={{ fontSize: "9px", color: "#666", marginTop: "4px", lineHeight: "1.3" }}>
-            💡 AWS Bedrock Stable Diffusion XL 사용
+            💡 AWS Bedrock Titan Image Generator 사용
           </div>
         </div>
 
