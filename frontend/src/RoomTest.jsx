@@ -1262,7 +1262,7 @@ export default function App() {
   };
 
   // 각 벽의 타일들을 하나의 텍스처로 합치기
-  const mergeWallTextures = async (group, tileSize = 512) => {
+  const mergeWallTextures = async (group, groupKey, tileSize = 512) => {
     if (group.tiles.length === 0) return null;
 
     const width = (group.maxX - group.minX + 1) * tileSize;
@@ -1277,6 +1277,9 @@ export default function App() {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
+    // 왼쪽/오른쪽 벽인지 확인
+    const needsRotation = groupKey === 'wall-left' || groupKey === 'wall-right';
+
     // 각 타일 이미지를 압축하고 적절한 위치에 그리기
     for (const tile of group.tiles) {
       try {
@@ -1290,7 +1293,18 @@ export default function App() {
           img.onload = () => {
             const canvasX = (tile.x - group.minX) * tileSize;
             const canvasY = (tile.y - group.minY) * tileSize;
-            ctx.drawImage(img, canvasX, canvasY, tileSize, tileSize);
+
+            if (needsRotation) {
+              // 왼쪽/오른쪽 벽: 이미지를 90도 회전
+              ctx.save();
+              ctx.translate(canvasX + tileSize / 2, canvasY + tileSize / 2);
+              ctx.rotate(Math.PI / 2);
+              ctx.drawImage(img, -tileSize / 2, -tileSize / 2, tileSize, tileSize);
+              ctx.restore();
+            } else {
+              // 일반적인 경우
+              ctx.drawImage(img, canvasX, canvasY, tileSize, tileSize);
+            }
             resolve();
           };
           img.onerror = reject;
@@ -1326,7 +1340,7 @@ export default function App() {
       for (const [groupKey, group] of Object.entries(wallGroups)) {
         if (group.tiles.length > 0) {
           console.log(`${groupKey} 처리 중... (타일 ${group.tiles.length}개)`);
-          const mergedTexture = await mergeWallTextures(group);
+          const mergedTexture = await mergeWallTextures(group, groupKey);
           if (mergedTexture) {
             mergedTextures[groupKey] = {
               texture: mergedTexture,
