@@ -860,7 +860,11 @@ export default function App() {
         console.log("[DEBUG] 백엔드로 요청 전송 중...");
 
         // 백엔드로 전송
-        const response = await fetch("http://localhost:8000/upload-texture", {
+        // 개발 환경에서는 localhost:8000, 프로덕션에서는 /api/ 프록시 사용
+        const apiUrl = import.meta.env.DEV
+          ? "http://localhost:8000/upload-texture"
+          : "/api/upload-texture";
+        const response = await fetch(apiUrl, {
           method: "POST",
           body: formData,
         });
