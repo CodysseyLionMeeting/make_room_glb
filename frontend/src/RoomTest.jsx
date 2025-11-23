@@ -866,6 +866,8 @@ export default function App() {
   const [selectedImage, setSelectedImage] = useState(null); // 선택된 이미지
   const [ambientIntensity, setAmbientIntensity] = useState(0.3); // 주변광 강도
   const [directionalIntensity, setDirectionalIntensity] = useState(0.6); // 방향광 강도
+  const [aiPrompt, setAiPrompt] = useState(""); // AI 생성 프롬프트
+  const [isGenerating, setIsGenerating] = useState(false); // AI 생성 중 여부
   const [isExporting, setIsExporting] = useState(false); // 내보내기 진행 상태
   const [showTemplates, setShowTemplates] = useState(false); // 템플릿 섹션 표시 여부
   const [sidebarWidth, setSidebarWidth] = useState(280); // 우측 사이드바 너비
@@ -1021,6 +1023,59 @@ export default function App() {
         console.error("[ERROR] 에러 스택:", error.stack);
         alert(`이미지 처리 중 오류가 발생했습니다.\n\n에러: ${error.message}\n\n백엔드 서버가 http://localhost:8000 에서 실행 중인지 확인해주세요.`);
       }
+    }
+  };
+
+  // AI로 타일 생성
+  const handleGenerateAI = async () => {
+    if (!aiPrompt.trim()) {
+      alert("프롬프트를 입력해주세요.");
+      return;
+    }
+
+    setIsGenerating(true);
+    console.log("[DEBUG] AI 생성 시작:", aiPrompt);
+
+    try {
+      const response = await fetch("http://localhost:8000/generate-tile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: aiPrompt,
+        }),
+      });
+
+      console.log("[DEBUG] AI 생성 응답 상태:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[ERROR] AI 생성 실패:", errorText);
+        throw new Error(`서버 오류: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("[DEBUG] AI 생성 성공");
+
+      if (data.success && data.texture_url) {
+        // 생성된 이미지를 업로드된 이미지 목록에 추가
+        const newImage = {
+          id: `ai_${Date.now()}`,
+          url: data.texture_url,
+          name: `AI: ${aiPrompt.substring(0, 20)}...`,
+        };
+
+        setUploadedImages((prev) => [...prev, newImage]);
+        setSelectedImage(newImage);
+        setAiPrompt(""); // 프롬프트 초기화
+        console.log("[DEBUG] 생성된 이미지 추가 완료");
+      }
+    } catch (error) {
+      console.error("[ERROR] AI 생성 실패:", error);
+      alert(`AI 타일 생성 중 오류가 발생했습니다.\n\n에러: ${error.message}\n\nAWS Bedrock이 설정되어 있는지 확인해주세요.`);
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -1739,6 +1794,55 @@ export default function App() {
         <h3 style={{ margin: "0 0 10px 0", fontSize: "16px", fontWeight: "bold" }}>
           이미지 갤러리
         </h3>
+
+        {/* AI 타일 생성 섹션 */}
+        <div style={{ marginBottom: "12px", padding: "10px", background: "#f0f7ff", borderRadius: "6px", border: "1px solid #bbdefb" }}>
+          <div style={{ fontSize: "13px", fontWeight: "bold", marginBottom: "8px", color: "#1976D2" }}>
+            🤖 AI로 타일 생성
+          </div>
+          <input
+            type="text"
+            placeholder="예: wooden floor, marble wall..."
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && !isGenerating) {
+                handleGenerateAI();
+              }
+            }}
+            disabled={isGenerating}
+            style={{
+              width: "100%",
+              padding: "8px",
+              fontSize: "11px",
+              border: "1px solid #ddd",
+              borderRadius: "4px",
+              marginBottom: "6px",
+              boxSizing: "border-box",
+            }}
+          />
+          <button
+            onClick={handleGenerateAI}
+            disabled={isGenerating || !aiPrompt.trim()}
+            style={{
+              width: "100%",
+              padding: "8px",
+              fontSize: "11px",
+              cursor: isGenerating || !aiPrompt.trim() ? "not-allowed" : "pointer",
+              background: isGenerating || !aiPrompt.trim() ? "#ccc" : "#1976D2",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              fontWeight: "bold",
+              transition: "all 0.2s ease",
+            }}
+          >
+            {isGenerating ? "⏳ 생성 중... (30초 소요)" : "✨ AI로 생성"}
+          </button>
+          <div style={{ fontSize: "9px", color: "#666", marginTop: "4px", lineHeight: "1.3" }}>
+            💡 AWS Bedrock Stable Diffusion XL 사용
+          </div>
+        </div>
 
         {/* 업로드 버튼 */}
         <button
