@@ -706,12 +706,19 @@ function Tile({
       loader.load(textureUrl, (loadedTexture) => {
         // JPEG/PNG 이미지는 sRGB 색상 공간으로 설정 (밝기 문제 해결)
         loadedTexture.colorSpace = THREE.SRGBColorSpace;
+
+        // 왼쪽/오른쪽 벽인 경우 텍스처를 90도 회전
+        if (tileKey.startsWith('wall-left') || tileKey.startsWith('wall-right')) {
+          loadedTexture.center.set(0.5, 0.5); // 중앙을 기준으로 회전
+          loadedTexture.rotation = Math.PI / 2; // 90도 회전
+        }
+
         setTexture(loadedTexture);
       });
     } else {
       setTexture(null);
     }
-  }, [textureUrl]);
+  }, [textureUrl, tileKey]);
 
   // [핵심 수정] GLB 모델의 재질을 코드로 강제 교체합니다.
   useEffect(() => {
