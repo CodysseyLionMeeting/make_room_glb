@@ -632,6 +632,8 @@ function Tile({
     if (textureUrl) {
       const loader = new THREE.TextureLoader();
       loader.load(textureUrl, (loadedTexture) => {
+        // JPEG/PNG 이미지는 sRGB 색상 공간으로 설정 (밝기 문제 해결)
+        loadedTexture.colorSpace = THREE.SRGBColorSpace;
         setTexture(loadedTexture);
       });
     } else {
@@ -665,12 +667,12 @@ function Tile({
           roughness: 0.8, // 거칠기 증가 (빛 반사 감소)
           metalness: 0.0, // 금속성 제거
           side: THREE.DoubleSide, // 양면 렌더링
-          // 자연광 효과 (GLB 내보내기와 동일한 밝기)
+          // 자연광 효과 감소 (밝기 조정)
           emissive: isSelected
             ? new THREE.Color(0x2266cc) // 선택 시 파란색 발광
-            : (texture ? new THREE.Color(0x202020) : new THREE.Color(0x181818)), // 자체 발광
-          emissiveIntensity: isSelected ? 0.8 : (texture ? 0.15 : 0.1), // 선택 시 더 강한 발광
-          toneMapped: false, // 톤 매핑 비활성화로 더 밝게
+            : (texture ? new THREE.Color(0x000000) : new THREE.Color(0x000000)), // 자체 발광 제거
+          emissiveIntensity: isSelected ? 0.5 : 0, // 선택 시만 발광
+          toneMapped: true, // 톤 매핑 활성화로 자연스러운 밝기
         });
 
         // userData에 tileKey 저장
@@ -786,8 +788,8 @@ export default function App() {
   const [tileTextures, setTileTextures] = useState({});
   const [uploadedImages, setUploadedImages] = useState([]); // 업로드된 이미지 목록
   const [selectedImage, setSelectedImage] = useState(null); // 선택된 이미지
-  const [ambientIntensity, setAmbientIntensity] = useState(0.5); // 주변광 강도
-  const [directionalIntensity, setDirectionalIntensity] = useState(1.2); // 방향광 강도
+  const [ambientIntensity, setAmbientIntensity] = useState(0.3); // 주변광 강도
+  const [directionalIntensity, setDirectionalIntensity] = useState(0.6); // 방향광 강도
   const [isExporting, setIsExporting] = useState(false); // 내보내기 진행 상태
   const [showTemplates, setShowTemplates] = useState(false); // 템플릿 섹션 표시 여부
   const [sidebarWidth, setSidebarWidth] = useState(280); // 우측 사이드바 너비
@@ -1151,6 +1153,8 @@ export default function App() {
       for (const [groupKey, data] of Object.entries(mergedTextures)) {
         const promise = new Promise((resolve) => {
           textureLoader.load(data.texture, (texture) => {
+            // JPEG/PNG 이미지는 sRGB 색상 공간으로 설정 (밝기 문제 해결)
+            texture.colorSpace = THREE.SRGBColorSpace;
             loadedTextures[groupKey] = texture;
             resolve();
           });
@@ -1210,20 +1214,20 @@ export default function App() {
               child.material = child.material.clone();
               child.material.map = loadedTextures[groupKey];
 
-              // 자연광 효과 (밝기 감소)
+              // 자연광 효과 제거 (밝기 조정)
               child.material.color = new THREE.Color(0xffffff);
-              child.material.emissive = new THREE.Color(0x202020);
-              child.material.emissiveIntensity = 0.15;
-              child.material.toneMapped = false;
+              child.material.emissive = new THREE.Color(0x000000);
+              child.material.emissiveIntensity = 0;
+              child.material.toneMapped = true;
               child.material.needsUpdate = true;
             }
           } else {
             // 텍스처가 없는 타일
             child.material = child.material.clone();
             child.material.color = new THREE.Color(0xffffff);
-            child.material.emissive = new THREE.Color(0x181818);
-            child.material.emissiveIntensity = 0.1;
-            child.material.toneMapped = false;
+            child.material.emissive = new THREE.Color(0x000000);
+            child.material.emissiveIntensity = 0;
+            child.material.toneMapped = true;
             child.material.needsUpdate = true;
           }
         }
@@ -1499,7 +1503,7 @@ export default function App() {
             castShadow
             shadow-mapSize={[2048, 2048]}
           />
-          <Environment preset="city" background={false} environmentIntensity={0.3} />
+          <Environment preset="city" background={false} environmentIntensity={0.15} />
           <OrbitControls
             minDistance={2}
             maxDistance={15}
