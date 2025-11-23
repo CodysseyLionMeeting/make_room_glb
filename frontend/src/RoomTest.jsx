@@ -1037,7 +1037,12 @@ export default function App() {
     console.log("[DEBUG] AI 생성 시작:", aiPrompt);
 
     try {
-      const response = await fetch("http://localhost:8000/generate-tile", {
+      // 개발 환경에서는 localhost:8000, 프로덕션에서는 /api/ 프록시 사용
+      const apiUrl = window.location.hostname === 'localhost'
+        ? "http://localhost:8000/generate-tile"
+        : "/api/generate-tile";
+
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
