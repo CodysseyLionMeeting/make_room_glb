@@ -297,9 +297,39 @@ async def generate_tile(request: GenerateTileRequest):
         error_code = e.response['Error']['Code']
         error_message = e.response['Error']['Message']
         print(f"[ERROR] AWS Bedrock Error ({error_code}): {error_message}")
+
+        # 사용자 친화적인 에러 메시지 생성
+        if error_code == "ValidationException":
+            if "content filters" in error_message or "AUP" in error_message:
+                user_message = (
+                    "⚠️ 컨텐츠 필터 차단\n\n"
+                    "입력한 프롬프트가 AWS의 컨텐츠 정책에 위배되어 차단되었습니다.\n\n"
+                    "다음을 피해주세요:\n"
+                    "• 저작권이 있는 캐릭터 이름 (예: Pikachu, Mickey Mouse)\n"
+                    "• 유명 브랜드 이름\n"
+                    "• 부적절한 콘텐츠\n\n"
+                    "추천 프롬프트:\n"
+                    "• wooden floor\n"
+                    "• marble texture\n"
+                    "• concrete wall\n"
+                    "• brick pattern"
+                )
+            else:
+                user_message = f"입력 오류: {error_message}"
+        elif error_code == "AccessDeniedException":
+            user_message = (
+                "⚠️ 모델 접근 권한 없음\n\n"
+                "AWS Bedrock에서 Titan Image Generator 모델에 대한 접근 권한이 활성화되지 않았습니다.\n\n"
+                "관리자에게 문의해주세요."
+            )
+        elif error_code == "ResourceNotFoundException":
+            user_message = f"⚠️ 모델을 찾을 수 없음\n\n{error_message}"
+        else:
+            user_message = f"AWS Bedrock 오류 ({error_code}): {error_message}"
+
         raise HTTPException(
-            status_code=500,
-            detail=f"AWS Bedrock Error: {error_message}"
+            status_code=400 if error_code == "ValidationException" else 500,
+            detail=user_message
         )
     except HTTPException as he:
         print(f"[ERROR] HTTPException: {he.detail}")

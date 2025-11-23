@@ -1057,7 +1057,20 @@ export default function App() {
       if (!response.ok) {
         const errorText = await response.text();
         console.error("[ERROR] AI 생성 실패:", errorText);
-        throw new Error(`서버 오류: ${response.status}`);
+
+        // 백엔드에서 온 구체적인 에러 메시지 파싱
+        let errorMessage = `서버 오류 (${response.status})`;
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.detail) {
+            errorMessage = errorData.detail;
+          }
+        } catch (e) {
+          // JSON 파싱 실패 시 원본 텍스트 사용
+          errorMessage = errorText || errorMessage;
+        }
+
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -1078,7 +1091,7 @@ export default function App() {
       }
     } catch (error) {
       console.error("[ERROR] AI 생성 실패:", error);
-      alert(`AI 타일 생성 중 오류가 발생했습니다.\n\n에러: ${error.message}\n\nAWS Bedrock이 설정되어 있는지 확인해주세요.`);
+      alert(error.message);
     } finally {
       setIsGenerating(false);
     }
